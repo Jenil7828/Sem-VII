@@ -1,0 +1,43 @@
+# Requirements for LP-VI/NLP notebooks (Practical1 & Practical2)
+# Minimal set to run the notebooks and NLTK downloads
+jupyter
+ipykernel
+nltk
+numpy
+pandas
+
+# Scientific / ML
+matplotlib
+seaborn
+scikit-learn
+gensim
+tqdm
+joblib
+scipy
+
+# Deep learning (CPU fallback)
+# The plain `torch`/`torchvision` entries below will install the CPU build by default
+# on many platforms. Installing CUDA-enabled PyTorch requires choosing a wheel
+# that matches your local CUDA toolkit/driver. To avoid breaking `pip install -r`
+# across the whole file, install PyTorch (with CUDA) manually using one of the
+# approaches below instead of embedding index flags directly in this file.
+#
+# Recommended (Conda, Windows - easiest for CUDA):
+#   conda install pytorch torchvision pytorch-cuda=12.9 -c pytorch -c nvidia
+#
+# Pip example (CUDA 12.9) — run manually in your venv:
+#   python -m pip install --upgrade pip
+  python -m pip install --extra-index-url https://download.pytorch.org/whl/cu129 \
+      torch==2.2.0+cu129 torchvision==0.17.1+cu129
+#
+# If you prefer the CPU-only build (no CUDA), simply install with:
+#   pip install torch torchvision
+#
+# You can optionally pin the `torch`/`torchvision` versions below if you know
+# the exact CUDA build you need (keep them commented unless you intend to
+# install via the PyTorch wheel index):
+# torch==2.2.0+cu129
+# torchvision==0.17.1+cu129
+#
+# Optional extras
+# spacy (if you prefer spaCy for preprocessing)
