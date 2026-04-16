@@ -211,3 +211,6 @@ __marimo__/
 .vs/
 /.vscode/
 /.idea/
+
+# DL mini-project generated artifacts
+LP-V/DL/ai_image_colrizer/.venv/
