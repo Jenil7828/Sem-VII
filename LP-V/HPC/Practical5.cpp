@@ -1,3 +1,7 @@
+// Practical 5: K-Means Clustering with OpenMP
+// g++ -fopenmp -O2 Practical5.cpp -o Practical5
+// Practical5 --data data_students.csv --init init_centroids.csv
+
 #include <iostream>
 #include <fstream>
 #include <vector>

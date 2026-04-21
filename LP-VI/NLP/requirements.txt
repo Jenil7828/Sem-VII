@@ -27,8 +27,7 @@ scipy
 #
 # Pip example (CUDA 12.9) — run manually in your venv:
 #   python -m pip install --upgrade pip
-  python -m pip install --extra-index-url https://download.pytorch.org/whl/cu129 \
-      torch==2.2.0+cu129 torchvision==0.17.1+cu129
+  python -m pip install --extra-index-url https://download.pytorch.org/whl/cu129 torch==2.2.0+cu129 torchvision==0.17.1+cu129
 #
 # If you prefer the CPU-only build (no CUDA), simply install with:
 #   pip install torch torchvision
