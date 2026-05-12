@@ -3,129 +3,126 @@
 
 // How to run: g++ -fopenmp Practical1.cpp -o program
 #include <iostream>
+#include <vector>
+#include <queue>
 #include <omp.h>
 
 using namespace std;
 
-#define MAX 20
+class Graph {
+    int V;
+    vector<vector<int>> adj;
 
-int graph[MAX][MAX];
-int visited[MAX];
-int n;
+public:
+    Graph(int V) {
+        this->V = V;
+        adj.resize(V);
+    }
 
-// ================= PARALLEL BFS =================
-void parallelBFS(int start) {
-    int frontier[MAX], next[MAX];
-    int frontSize = 0, nextSize = 0;
+    void addEdge(int u, int v) {
+        adj[u].push_back(v);
+        adj[v].push_back(u); // undirected graph
+    }
 
-    for (int i = 0; i < n; i++)
-        visited[i] = 0;
+    // -------- PARALLEL BFS --------
+    void parallelBFS(int start) {
+        vector<bool> visited(V, false);
+        queue<int> q;
 
-    frontier[frontSize++] = start;
-    visited[start] = 1;
+        visited[start] = true;
+        q.push(start);
 
-    cout << "\nParallel BFS: ";
+        cout << "Parallel BFS: ";
 
-    while (frontSize > 0) {
-        nextSize = 0;
+        while (!q.empty()) {
+            int size = q.size();
 
-        #pragma omp parallel for
-        for (int i = 0; i < frontSize; i++) {
-            int node = frontier[i];
+            #pragma omp parallel for
+            for (int i = 0; i < size; i++) {
+                int node = -1;
 
-            #pragma omp critical
-            cout << node << " ";
+                #pragma omp critical
+                {
+                    if (!q.empty()) {
+                        node = q.front();
+                        q.pop();
+                        cout << node << " ";
+                    }
+                }
 
-            for (int j = 0; j < n; j++) {
-                if (graph[node][j] && !visited[j]) {
-                    #pragma omp critical
-                    {
-                        if (!visited[j]) {
-                            visited[j] = 1;
-                            next[nextSize++] = j;
+                if (node == -1) continue;
+
+                for (int neighbor : adj[node]) {
+                    if (!visited[neighbor]) {
+                        #pragma omp critical
+                        {
+                            if (!visited[neighbor]) {
+                                visited[neighbor] = true;
+                                q.push(neighbor);
+                            }
                         }
                     }
                 }
             }
         }
-
-        frontSize = nextSize;
-        for (int i = 0; i < nextSize; i++)
-            frontier[i] = next[i];
+        cout << endl;
     }
-}
 
+    // -------- PARALLEL DFS --------
+    void parallelDFSUtil(int node, vector<bool>& visited) {
+        visited[node] = true;
 
-// ================= PARALLEL DFS =================
-void parallelDFSUtil(int node) {
-    int processNode = 0;
+        #pragma omp critical
+        cout << node << " ";
 
-    #pragma omp critical
-    {
-        if (!visited[node]) {
-            visited[node] = 1;
-            processNode = 1;
-            cout << node << " ";
+        #pragma omp parallel for
+        for (int i = 0; i < adj[node].size(); i++) {
+            int neighbor = adj[node][i];
+
+            if (!visited[neighbor]) {
+                parallelDFSUtil(neighbor, visited);
+            }
         }
     }
 
-    if (!processNode) return;
+    void parallelDFS(int start) {
+        vector<bool> visited(V, false);
 
-    for (int i = 0; i < n; i++) {
-        if (graph[node][i]) {
-            #pragma omp task
-            parallelDFSUtil(i);
-        }
+        cout << "Parallel DFS: ";
+        parallelDFSUtil(start, visited);
+        cout << endl;
     }
+};
 
-    #pragma omp taskwait
-}
-
-void parallelDFS(int start) {
-    for (int i = 0; i < n; i++)
-        visited[i] = 0;
-
-    cout << "\nParallel DFS: ";
-
-    #pragma omp parallel
-    {
-        #pragma omp single
-        parallelDFSUtil(start);
-    }
-}
-
-
-// ================= MAIN =================
 int main() {
-    int edges, u, v, start;
+    int V, E;
 
-    cout << "Enter number of nodes: ";
-    cin >> n;
+    cout << "Enter number of vertices: ";
+    cin >> V;
 
-    // Initialize graph
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++)
-            graph[i][j] = 0;
+    Graph g(V);
 
     cout << "Enter number of edges: ";
-    cin >> edges;
+    cin >> E;
 
-    cout << "Enter edges (u v) for undirected graph:\n";
-    for (int i = 0; i < edges; i++) {
+    cout << "Enter edges (u v):\n";
+    for (int i = 0; i < E; i++) {
+        int u, v;
         cin >> u >> v;
-        graph[u][v] = 1;
-        graph[v][u] = 1;
+        g.addEdge(u, v);
     }
 
-    cout << "Enter starting node: ";
+    int start;
+    cout << "Enter starting vertex: ";
     cin >> start;
 
-    parallelBFS(start);
-    parallelDFS(start);
+    g.parallelBFS(start);
+    g.parallelDFS(start);
 
-    cout << endl;
     return 0;
 }
+//g++ -fopenmp file.cpp -o graph
+//./graph
 
 // Sample Input:
 // Enter number of nodes: 5

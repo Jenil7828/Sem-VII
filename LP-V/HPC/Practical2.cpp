@@ -1,220 +1,163 @@
 // Write a program to implement Parallel Bubble Sort and Merge sort using OpenMP. 
 // Use existing algorithms and measure the performance of sequential and parallel algorithms.
 // - Use std::vector for dynamic arrays
-// How to compile: g++ -fopenmp Practical2.cpp -O2 -std=c++11 -o program
+// How to compile: g++ -fopenmp Practical2.cpp -o program
 // How to run: g++ -fopenmp Practical2.cpp -o program
 
 #include <iostream>
 #include <vector>
-#include <algorithm>
-#include <cstdlib>
-#include <ctime>
+#include <queue>
 #include <omp.h>
-#include <iomanip>
-
 using namespace std;
 
-// Thresholds and tuning
-const int BUBBLE_SORT_SKIP_THRESHOLD = 2000;    // skip bubble for large n
-const int MERGE_SORT_TASK_THRESHOLD = 1000;    // only create tasks for segments larger than this
-
-// ================= UTILITY =================
-void generateArray(vector<int> &arr) {
-    for (size_t i = 0; i < arr.size(); ++i)
-        arr[i] = rand() % 100000; // wider range
-}
-
-// ================= SEQUENTIAL BUBBLE SORT =================
-// Standard optimized bubble sort with early exit
-void bubbleSort(int arr[], int n) {
-    for (int i = 0; i < n - 1; ++i) {
-        bool swapped = false;
-        for (int j = 0; j < n - i - 1; ++j) {
-            if (arr[j] > arr[j + 1]) {
-                swap(arr[j], arr[j + 1]);
-                swapped = true;
+void SequentialBubbleSort(vector<int>& arr) {
+    int n = arr.size();
+    for (int i = 0; i < n-1; i++) {
+        for (int j = 0; j < n-i-1; j++) {
+            if(arr[j] > arr[j+1]) {
+                swap(arr[j], arr[j+1]);
             }
         }
-        if (!swapped) // already sorted
-            break;
     }
 }
 
-// ================= PARALLEL BUBBLE SORT (Odd-Even) =================
-// Uses parallel for in even/odd phases. Uses atomic increments to detect
-// whether any swap happened across threads so we can exit early.
-void parallelBubbleSort(int arr[], int n) {
-    for (int i = 0; i < n; ++i) {
-        int swapped = 0;
-
-        // Even phase
+void ParallelBubbleSort(vector<int>& arr) {
+    int n = arr.size();
+    for(int i = 0; i < n-1; i++) {
         #pragma omp parallel for
-        for (int j = 0; j < n - 1; j += 2) {
-            if (arr[j] > arr[j + 1]) {
-                swap(arr[j], arr[j + 1]);
-                #pragma omp atomic
-                ++swapped;
+        for(int j = 0; j < n-1; j++) {
+            if(arr[j] > arr[j+1]) {
+                swap(arr[j], arr[j+1]);
             }
         }
 
-        // Odd phase
         #pragma omp parallel for
-        for (int j = 1; j < n - 1; j += 2) {
-            if (arr[j] > arr[j + 1]) {
-                swap(arr[j], arr[j + 1]);
-                #pragma omp atomic
-                ++swapped;
+        for(int j = 0; j < n-1; j+=2) {
+            if(arr[j] > arr[j+1]) {
+                swap(arr[j], arr[j+1]);
             }
         }
-
-        if (!swapped) // no swaps in both phases -> sorted
-            break;
     }
 }
 
-// ================= MERGE FUNCTION (dynamic buffers) =================
-void merge(int arr[], int l, int m, int r) {
-    int n1 = m - l + 1;
-    int n2 = r - m;
-
-    // allocate temporary buffers dynamically
-    int *L = new int[n1];
-    int *R = new int[n2];
-
-    for (int i = 0; i < n1; ++i)
-        L[i] = arr[l + i];
-    for (int j = 0; j < n2; ++j)
-        R[j] = arr[m + 1 + j];
-
-    int i = 0, j = 0, k = l;
-    while (i < n1 && j < n2) {
-        if (L[i] <= R[j])
-            arr[k++] = L[i++];
-        else
-            arr[k++] = R[j++];
+void merge(vector<int>& arr, int left, int mid, int right) {
+    vector<int> temp(right - left + 1);
+    int l= left;
+    int r = mid + 1;
+    int t = 0;
+    while(l <= mid && r <= right) {
+        if(arr[l] < arr[r]) {
+            temp[t++] = arr[l++];
+        }
+        else {
+            temp[t++] = arr[r++];
+        }
     }
-
-    while (i < n1)
-        arr[k++] = L[i++];
-    while (j < n2)
-        arr[k++] = R[j++];
-
-    delete[] L;
-    delete[] R;
-}
-
-// ================= SEQUENTIAL MERGE SORT =================
-void mergeSort(int arr[], int l, int r) {
-    if (l < r) {
-        int m = l + (r - l) / 2;
-        mergeSort(arr, l, m);
-        mergeSort(arr, m + 1, r);
-        merge(arr, l, m, r);
+    while (l <= mid) {
+        temp[t++] = arr[l++];
+    }
+    while (r <= right) {
+        temp[t++] = arr[r++];
+    }
+    for(int pos = left, k = 0; pos <= right; pos++, k++) {
+        arr[pos] = temp[k];
     }
 }
 
-// ================= PARALLEL MERGE SORT =================
-// Uses OpenMP tasks but only for sufficiently large partitions to avoid
-// creating too many tasks which hurts performance.
-void parallelMergeSort(int arr[], int l, int r) {
-    if (l >= r) return;
-
-    int size = r - l + 1;
-    if (size <= MERGE_SORT_TASK_THRESHOLD) {
-        // For small partitions, fall back to sequential merge sort
-        mergeSort(arr, l, r);
-        return;
-    }
-
-    int m = l + (r - l) / 2;
-
-    #pragma omp task shared(arr) firstprivate(l,m)
+void ParallelMergeSort(vector<int>& arr, int left, int right) {
+    if(left >= right) return;
+    int mid = (right + left) / 2;
+    #pragma omp parallel sections
     {
-        parallelMergeSort(arr, l, m);
-    }
-
-    #pragma omp task shared(arr) firstprivate(m,r)
-    {
-        parallelMergeSort(arr, m + 1, r);
-    }
-
-    #pragma omp taskwait
-    merge(arr, l, m, r);
-}
-
-// ================= MAIN =================
-int main() {
-    srand((unsigned)time(nullptr));
-
-    int n;
-    cout << "Enter number of elements: ";
-    if (!(cin >> n) || n <= 0) {
-        cout << "Invalid input. Exiting.\n";
-        return 1;
-    }
-
-    // Use vectors sized to n so memory is minimal and dynamic
-    vector<int> arr(n), arr1(n), arr2(n), arr3(n), arr4(n);
-    generateArray(arr);
-
-    // Create copies for each algorithm
-    arr1 = arr;
-    arr2 = arr;
-    arr3 = arr;
-    arr4 = arr;
-
-    double start, end;
-    cout << fixed << setprecision(6);
-
-    // Sequential Bubble Sort (skipped for large n)
-    if (n <= BUBBLE_SORT_SKIP_THRESHOLD) {
-        start = omp_get_wtime();
-        bubbleSort(arr1.data(), n);
-        end = omp_get_wtime();
-        cout << "Sequential Bubble Sort Time: " << (end - start) << " seconds\n";
-    } else {
-        cout << "Sequential Bubble Sort Time: Skipped for n > " << BUBBLE_SORT_SKIP_THRESHOLD << "\n";
-    }
-
-    // Parallel Bubble Sort (skipped for large n)
-    if (n <= BUBBLE_SORT_SKIP_THRESHOLD) {
-        start = omp_get_wtime();
-        parallelBubbleSort(arr2.data(), n);
-        end = omp_get_wtime();
-        cout << "Parallel Bubble Sort Time:   " << (end - start) << " seconds\n";
-    } else {
-        cout << "Parallel Bubble Sort Time:   Skipped for n > " << BUBBLE_SORT_SKIP_THRESHOLD << "\n";
-    }
-
-    // Debug message to verify merge sort section runs
-    cout << "\nDebug: Starting Merge Sorts...\n";
-
-    // Sequential Merge Sort
-    start = omp_get_wtime();
-    mergeSort(arr3.data(), 0, n - 1);
-    end = omp_get_wtime();
-    cout << "Sequential Merge Sort Time: " << (end - start) << " seconds\n";
-
-    // Parallel Merge Sort
-    start = omp_get_wtime();
-    #pragma omp parallel
-    {
-        #pragma omp single
+        #pragma omp section
         {
-            parallelMergeSort(arr4.data(), 0, n - 1);
+            ParallelMergeSort(arr, left, mid);
+        }
+        #pragma omp section
+        {
+            ParallelMergeSort(arr, mid+1, right);
         }
     }
+    merge(arr, left, mid, right);
+}
+
+void SequentialMergeSort(vector<int>& arr, int left, int right) {
+    if(left >= right) return;
+    int mid = (left + right) / 2;
+    SequentialMergeSort(arr, left, mid);
+    SequentialMergeSort(arr, mid+1, right);
+    merge(arr, left, mid, right);
+}
+
+void printArray(const vector<int>& arr) {
+    for(int num: arr) {
+        cout<<num<<" ";
+    }
+    cout<<endl;
+}
+
+int main() {
+    int n;
+    cout<<"Enter number of elements: ";
+    cin>>n;
+    vector<int> arr(n);
+    for(int i = 0; i < n; i++) {
+        cout<<"Enter element "<<i+1<<": ";
+        cin>>arr[i];
+    }
+    vector<int> arr1 = arr, arr2 = arr, arr3 = arr, arr4 = arr;
+    double start, end;
+
+    start = omp_get_wtime();
+    SequentialBubbleSort(arr1);
     end = omp_get_wtime();
-    cout << "Parallel Merge Sort Time:   " << (end - start) << " seconds\n";
+    cout<<"Sequential Bubble Sort: ";
+    printArray(arr1);
+    cout<<"Time taken: "<<end - start<<" seconds"<<endl;
+
+    start = omp_get_wtime();
+    ParallelBubbleSort(arr2);
+    end = omp_get_wtime();
+    cout<<"Parallel Bubble Sort: ";
+    printArray(arr2);
+    cout<<"Time taken: "<<end - start<<" seconds"<<endl;
+
+    start = omp_get_wtime();
+    SequentialMergeSort(arr3, 0, n-1);
+    end = omp_get_wtime();
+    cout<<"Sequential Merge Sort: ";
+    printArray(arr3);
+    cout<<"Time taken: "<<end - start<<" seconds"<<endl;
+
+    start = omp_get_wtime();
+    ParallelMergeSort(arr4, 0, n-1);
+    end = omp_get_wtime();
+    cout<<"Parallel Merge Sort: ";
+    printArray(arr4);
+    cout<<"Time taken: "<<end - start<<" seconds"<<endl;
 
     return 0;
 }
 
 // Sample Input:
-// Enter number of elements: 1000
+// Enter number of elements: 10
+// Enter element 1: 5
+// Enter element 2: 2
+// Enter element 3: 9
+// Enter element 4: 1
+// Enter element 5: 5
+// Enter element 6: 6
+// Enter element 7: 7
+// Enter element 8: 3
+// Enter element 9: 4
+// Enter element 10: 8
 // Sample Output:
-// Sequential Bubble Sort Time: 0.123456
-// Parallel Bubble Sort Time: 0.012345
-// Sequential Merge Sort Time: 0.012345
-// Parallel Merge Sort Time: 0.001234
+// Sequential Bubble Sort: 1 2 3 4 5 5 6 7 8 9
+// Time taken: 0.0002 seconds
+// Parallel Bubble Sort: 1 2 3 4 5 5 6 7 8 9
+// Time taken: 0.0001 seconds
+// Sequential Merge Sort: 1 2 3 4 5 5 6 7 8 9
+// Time taken: 0.0001 seconds
+// Parallel Merge Sort: 1 2 3 4 5 5 6 7 8 9
+// Time taken: 0.00005 seconds
 // Note: The actual times will vary based on the system and the random data generated.
